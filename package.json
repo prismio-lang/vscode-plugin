@@ -1,0 +1,174 @@
+{
+  "name": "prismio",
+  "displayName": "Prismio",
+  "description": "The Prismio language: diagnostics, completion, navigation and refactoring from the toolchain's own language server.",
+  "version": "0.1.0",
+  "publisher": "prismio",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prismio/vscode-prismio"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onLanguage:prismio",
+    "workspaceContains:**/build.ums"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "prismio",
+        "aliases": [
+          "Prismio"
+        ],
+        "extensions": [
+          ".psm"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "ums",
+        "aliases": [
+          "UMS"
+        ],
+        "filenames": [
+          "build.ums"
+        ],
+        "extensions": [
+          ".ums"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "prismio",
+        "scopeName": "source.prismio",
+        "path": "./syntaxes/prismio.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Prismio",
+      "properties": {
+        "prismio.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The `prismio` executable. Empty means the first one on `PATH`, then `~/.prismio/bin`. The server (`prismio lsp`) and every task come from this toolchain, so its version decides what the editor knows."
+        },
+        "prismio.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the messages between the editor and the language server to the Prismio output channel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "prismio.restartServer",
+        "title": "Prismio: Restart Language Server"
+      },
+      {
+        "command": "prismio.showOutput",
+        "title": "Prismio: Show Server Output"
+      },
+      {
+        "command": "prismio.debugTarget",
+        "title": "Prismio: Build and Debug a Target"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "prismio",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "build, run, test, clean, or a command declared in build.ums."
+          },
+          "target": {
+            "type": "string",
+            "description": "A target of build.ums; every target when empty."
+          },
+          "release": {
+            "type": "boolean",
+            "description": "Build with the release profile."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "prismio",
+        "owner": "prismio",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": [
+          {
+            "regexp": "^(error|warning)(?:\\[(P?[A-Z]*\\d+)\\])?: (.*)$",
+            "severity": 1,
+            "code": 2,
+            "message": 3
+          },
+          {
+            "regexp": "^\\s*--> (.+?):(\\d+):(\\d+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ]
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "prismio",
+        "scopes": {
+          "function": [
+            "entity.name.function.prismio"
+          ],
+          "method": [
+            "entity.name.function.prismio"
+          ]
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "grammar": "node scripts/generate-grammar.mjs",
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "lint": "tsc -p . --noEmit",
+    "test:grammar": "node --test test/grammar.test.mjs",
+    "test": "npm run compile && npm run test:grammar && node out/test/runTests.js",
+    "package": "npm run compile && vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.6.0",
+    "vscode-textmate": "^9.2.0",
+    "vscode-oniguruma": "^2.0.1"
+  }
+}

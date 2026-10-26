@@ -1,0 +1,15 @@
+import std.io
+import shapes
+
+// Add two numbers.
+fn add(a: Int, b: Int) -> Int {
+    let total = a + b
+    return total
+}
+
+fn main() -> Int {
+    let p = Point { x: 1, y: 2 }
+    let n = add(p.x, p.sum())
+    println(n)
+    return 0
+}

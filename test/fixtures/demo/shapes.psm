@@ -1,0 +1,6 @@
+public struct Point { public x: Int, public y: Int }
+
+impl Point {
+    // The sum of both coordinates.
+    public fn sum(self) -> Int { return self.x + self.y }
+}

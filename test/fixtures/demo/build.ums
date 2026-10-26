@@ -1,0 +1,17 @@
+project {
+    name = "demo"
+    version = "0.1.0"
+    prismio = "0.1.0"
+}
+
+targets {
+    executable("demo") {
+        entry = "main.psm"
+    }
+}
+
+commands {
+    command("hello") {
+        description = "Say hello"
+    }
+}

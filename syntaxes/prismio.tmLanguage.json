@@ -1,0 +1,168 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Prismio",
+  "scopeName": "source.prismio",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#char"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#type"
+    },
+    {
+      "include": "#call"
+    },
+    {
+      "include": "#operator"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.double-slash.prismio",
+      "match": "//.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.prismio",
+      "begin": "\"",
+      "end": "\"|$",
+      "patterns": [
+        {
+          "match": "\\\\(?:x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]{1,6}\\}|[nrt0\\\\\"'])",
+          "name": "constant.character.escape.prismio"
+        }
+      ]
+    },
+    "char": {
+      "name": "string.quoted.single.prismio",
+      "begin": "'",
+      "end": "'|$",
+      "patterns": [
+        {
+          "match": "\\\\(?:x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]{1,6}\\}|[nrt0\\\\\"'])",
+          "name": "constant.character.escape.prismio"
+        }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.prismio",
+          "match": "\\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*\\b"
+        },
+        {
+          "name": "constant.numeric.octal.prismio",
+          "match": "\\b0[oO][0-7](?:_?[0-7])*\\b"
+        },
+        {
+          "name": "constant.numeric.binary.prismio",
+          "match": "\\b0[bB][01](?:_?[01])*\\b"
+        },
+        {
+          "name": "constant.numeric.float.prismio",
+          "match": "\\b\\d(?:_?\\d)*\\.(?!\\.)\\d(?:_?\\d)*(?:[eE][+-]?\\d+)?\\b|\\b\\d(?:_?\\d)*[eE][+-]?\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.prismio",
+          "match": "\\b\\d(?:_?\\d)*\\b"
+        }
+      ]
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.prismio"
+            },
+            "2": {
+              "name": "entity.name.function.prismio"
+            }
+          }
+        },
+        {
+          "match": "\\b(struct|enum|trait|codeset|typelist)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.prismio"
+            },
+            "2": {
+              "name": "entity.name.type.prismio"
+            }
+          }
+        },
+        {
+          "match": "\\b(prop|codeset|typelist|workload)(?=\\s+[A-Za-z_])",
+          "name": "storage.type.prismio"
+        },
+        {
+          "match": "\\b(public|private|internal|unique|cold|hot|inline|noinline|noreturn|async|export|naked|section|align|repr|packed|volatile)\\b(?=\\s+[A-Za-z_(])",
+          "name": "storage.modifier.prismio"
+        }
+      ]
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.prismio",
+          "match": "\\b(?:continue|return|match|break|throw|while|else|loop|for|if|in)\\b"
+        },
+        {
+          "name": "storage.type.prismio",
+          "match": "\\b(?:default|import|struct|extern|region|trait|where|inout|impl|enum|sink|let|mut|fn|as)\\b"
+        },
+        {
+          "name": "keyword.operator.word.prismio",
+          "match": "\\b(?:and|not|or|is)\\b"
+        },
+        {
+          "name": "constant.language.prismio",
+          "match": "\\b(?:false|true|none)\\b"
+        },
+        {
+          "name": "variable.language.self.prismio",
+          "match": "\\bself\\b|\\bSelf\\b"
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "name": "support.type.builtin.prismio",
+          "match": "\\b(?:String|Isize|Usize|Float|UInt|F128|BF16|Bool|Char|Void|Int|I16|I32|I64|U16|U32|U64|F16|F32|F64|Ptr|I8|U8)\\b"
+        },
+        {
+          "name": "entity.name.type.prismio",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "call": {
+      "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*(?:<[^>()]*>)?\\()",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.call.prismio"
+        }
+      }
+    },
+    "operator": {
+      "name": "keyword.operator.prismio",
+      "match": "\\.\\.<|\\.\\.\\.|!=|%=|&&|&=|\\*=|\\+=|\\-=|\\->|\\/=|<<|<=|==|=>|>=|>>|\\^=|\\|=|\\|\\||\\?\\?|\\.\\.|!|%|&|\\*|\\+|\\-|\\/|<|=|>|\\^|\\||~"
+    }
+  }
+}
