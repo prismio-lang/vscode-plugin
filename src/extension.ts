@@ -34,7 +34,12 @@ async function startServer(context: vscode.ExtensionContext): Promise<void> {
       "Prismio: no `prismio` found. Install the toolchain, or set `prismio.path`. Highlighting works without it; nothing else does.");
     return;
   }
-  const serverOptions: ServerOptions = { command: prismio, args: ["lsp"], options: { env: process.env } };
+  // PRISMIO_INTERNAL_HOSTED: inside a project that names its own compiler, a launcher named `prismio` hands the
+  // command to that project's host, which may be any generation and may not have a server. The editor wants the
+  // toolchain it was pointed at, whatever folder is open (the server sets the same for the checks it starts).
+  const serverOptions: ServerOptions = {
+    command: prismio, args: ["lsp"], options: { env: { ...process.env, PRISMIO_INTERNAL_HOSTED: "1" } },
+  };
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", language: "prismio" }],
     outputChannel: output,

@@ -21,7 +21,7 @@ async function main(): Promise<void> {
       vscodeExecutablePath: fs.existsSync(vscodeExecutablePath) ? vscodeExecutablePath : undefined,
       extensionDevelopmentPath,
       extensionTestsPath: path.join(__dirname, "suite", "index"),
-      extensionTestsEnv: { PRISMIO_INTERNAL_HOSTED: "1" },
+      extensionTestsEnv: {},
       launchArgs: [workspace, "--disable-extensions", "--disable-workspace-trust", `--user-data-dir=${path.join(root, "user")}`],
     });
   } finally {
