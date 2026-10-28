@@ -54,6 +54,19 @@ test("go to definition crosses files", async () => {
   assert.ok(found.length === 1 && JSON.stringify(found).includes("shapes.psm"), JSON.stringify(found));
 });
 
+test("go to definition reaches the library, whose source the server writes out", async () => {
+  const found = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>("vscode.executeDefinitionProvider", main.uri, at(main, "println", "println(n"));
+  assert.ok(found.length >= 1 && JSON.stringify(found).includes("io.psm"), JSON.stringify(found));
+  const target = "targetUri" in found[0] ? found[0].targetUri : found[0].uri;
+  const text = (await vscode.workspace.openTextDocument(target)).getText();
+  assert.ok(text.includes("fn println"), "the library's source opens: " + target.fsPath);
+});
+
+test("find references lists the declaration and the uses", async () => {
+  const found = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeReferenceProvider", main.uri, at(main, "add", "fn add"));
+  assert.ok(found.length >= 2 && found.every((l) => l.uri.fsPath.endsWith("main.psm")), JSON.stringify(found));
+});
+
 test("completion after a dot lists the members", async () => {
   const line = at(main, "add(p.x", "add(p.x").line;
   const original = main.lineAt(line).text;
