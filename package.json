@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prismio/vscode-prismio"
+    "url": "https://github.com/prismio-lang/vscode-plugin"
   },
   "engines": {
     "vscode": "^1.100.0"
