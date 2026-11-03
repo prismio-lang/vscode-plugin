@@ -54,3 +54,19 @@ test("a sample is coloured as the language reads it", async () => {
   has("public struct Point {", "Point", "entity.name.type.prismio");
   has("    println(n)", "println", "entity.name.function.call.prismio");
 });
+
+test("the extension and each language have an icon, and the files exist and ship", () => {
+  const manifest = JSON.parse(read("package.json"));
+  const files = [manifest.icon];
+  for (const language of manifest.contributes.languages) {
+    assert.ok(language.icon, `language ${language.id} has no icon`);
+    files.push(language.icon.light, language.icon.dark);
+  }
+  for (const file of files) {
+    assert.ok(readFileSync(join(root, file)).length > 100, `${file} is missing or empty`);
+  }
+  // 128 px is what the Marketplace shows; a smaller picture is blurred there.
+  const header = readFileSync(join(root, manifest.icon));
+  assert.strictEqual(header.readUInt32BE(16), 128, "the extension icon is 128 px wide");
+  assert.ok(!read(".vscodeignore").split("\n").some((line) => line.trim().startsWith("images")), "images/ is shipped");
+});

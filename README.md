@@ -11,6 +11,7 @@ that builds your program, so the editor and the build cannot disagree about the 
   types and parameter names
 - Semantic highlighting, folding, rename with conflict checks, the "add import" quick fix
 - Formatting: `prismio fmt`, for the document or a range
+- The Prismio logo on `.psm` files (and the manifest's mark on `build.ums`) in the explorer and on tabs, under any file icon theme that shows language icons, the default included
 - Tasks and a debug entry from `build.ums`: build, run, test, and every `command` the manifest declares
 
 ## Requirements
