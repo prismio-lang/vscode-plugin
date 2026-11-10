@@ -7,3 +7,9 @@ tsconfig.json
 **/*.map
 node_modules/.bin/**
 out/test/**
+.idea/**
+.gitignore
+.github/**
+package-lock.json
+syntaxes/tokens.json
+*.vsix

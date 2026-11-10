@@ -164,7 +164,8 @@
     "watch": "tsc -watch -p .",
     "lint": "tsc -p . --noEmit",
     "test:grammar": "node --test test/grammar.test.mjs",
-    "test": "npm run compile && npm run test:grammar && node out/test/runTests.js",
+    "test:package": "node --test test/package.test.mjs",
+    "test": "npm run compile && npm run test:grammar && npm run test:package && node out/test/runTests.js",
     "package": "npm run compile && vsce package",
     "vscode:prepublish": "npm run compile"
   },
