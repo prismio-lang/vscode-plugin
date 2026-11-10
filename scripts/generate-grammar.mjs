@@ -36,6 +36,7 @@ export function buildGrammar(tokens) {
 
   const markers = tokens.contextualKeywords.filter((k) => /marker|visibility|qualifier|annotation/.test(k.context)).map((k) => k.word);
   const declarations = tokens.contextualKeywords.filter((k) => /^declaration/.test(k.context)).map((k) => k.word);
+  const assembly = tokens.contextualKeywords.filter((k) => /^module assembly/.test(k.context)).map((k) => k.word);
   const types = [...tokens.types.integer, ...tokens.types.float, ...tokens.types.other];
   const operators = [...new Set(tokens.operators.map((o) => o.text))].sort((a, b) => b.length - a.length).map(escape);
 
@@ -67,6 +68,8 @@ export function buildGrammar(tokens) {
           { match: "\\b(struct|enum|trait|codeset|typelist)\\s+([A-Za-z_][A-Za-z0-9_]*)", captures: { 1: { name: "storage.type.prismio" }, 2: { name: "entity.name.type.prismio" } } },
           { match: `\\b(${declarations.join("|")})(?=\\s+[A-Za-z_])`, name: "storage.type.prismio" },
           { match: `\\b(${markers.join("|")})\\b(?=\\s+[A-Za-z_(])`, name: "storage.modifier.prismio" },
+          // Module assembly: `asm "..."` at the top level, where the word is followed by a string.
+          ...(assembly.length > 0 ? [{ match: `\\b(?:${assembly.join("|")})(?=\\s*")`, name: "storage.type.prismio" }] : []),
         ],
       },
       keyword: {

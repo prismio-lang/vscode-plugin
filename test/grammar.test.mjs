@@ -52,6 +52,8 @@ test("a sample is coloured as the language reads it", async () => {
   has("// a comment", "// a comment", "comment.line.double-slash.prismio");
   has("let ok = true", "true", "constant.language.prismio");
   has("public struct Point {", "Point", "entity.name.type.prismio");
+  has("asm \"nop\"", "asm", "storage.type.prismio");
+  assert.ok(!scopesOf("let asm = 1").some(([t, s]) => t === "asm" && s === "storage.type.prismio"), "asm is a keyword only before a string");
   has("    println(n)", "println", "entity.name.function.call.prismio");
 });
 

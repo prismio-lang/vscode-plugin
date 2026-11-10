@@ -113,6 +113,10 @@
         {
           "match": "\\b(public|private|internal|unique|cold|hot|inline|noinline|noreturn|async|export|naked|section|align|repr|packed|volatile)\\b(?=\\s+[A-Za-z_(])",
           "name": "storage.modifier.prismio"
+        },
+        {
+          "match": "\\b(?:asm)(?=\\s*\")",
+          "name": "storage.type.prismio"
         }
       ]
     },
