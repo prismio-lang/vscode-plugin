@@ -1,0 +1,2 @@
+/work/pm/build.ums:7:5: error[UMS2104]: executable requires exactly one string name
+/work/pm/build.ums:1:1: error[UMS2307]: at least one build target is required

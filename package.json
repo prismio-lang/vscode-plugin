@@ -156,6 +156,23 @@
             "column": 3
           }
         ]
+      },
+      {
+        "name": "prismio-ums",
+        "owner": "prismio-ums",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+): (error|warning)(?:\\[([A-Z]*\\d+)\\])?: (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "code": 5,
+          "message": 6
+        }
       }
     ],
     "semanticTokenScopes": [

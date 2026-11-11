@@ -1,0 +1,11 @@
+warning[P2003]: identifier `ſum` contains U+017F, which UTS #39 restricts in identifiers: it is uncommon, obsolete or easily mistaken
+ --> /work/pm/src/main.psm:4:9
+  |
+4 |     let ſum = 1
+  |         ^^^
+error[P4001]: initializer for `x`: expected Int, found String
+ --> /work/pm/src/main.psm:6:18
+  |
+6 |     let x: Int = "a"
+  |                  ^^^
+error: aborting due to 1 previous error

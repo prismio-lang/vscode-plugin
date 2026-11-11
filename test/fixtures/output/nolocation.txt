@@ -1,0 +1,3 @@
+warning[P1081]: dependencies are resolved and locked, but Prismio 0.1 does not import from them yet
+  note: vendor the source beneath your entry module and import it by its dotted path
+Built /work/dep/.prismio/build/debug/dep
