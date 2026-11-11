@@ -8,7 +8,7 @@ What changes in the Prismio extension for VS Code. The format follows
 First release. The extension is a client of the toolchain's own language server, `prismio lsp`: everything that has
 to understand the language is answered by the compiler you point it at, so the editor and the build cannot disagree.
 It needs VS Code 1.100 or newer and a Prismio toolchain that ships `prismio-lsp` (0.2.0). Its identifier is
-`io.prismio`, and it ships as `prismio-vscode-0.1.0.vsix`: one bundled file, no `node_modules`.
+`Prismio.prismio`, and it ships as `prismio-vscode-0.1.0.vsix`: one bundled file, no `node_modules`.
 
 ### Language features, from the server
 

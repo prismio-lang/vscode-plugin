@@ -54,7 +54,7 @@ PRISMIO=/path/to/prismio pnpm test   # every test, then the end-to-end suite in 
 pnpm run package                     # prismio-vscode-<version>.vsix
 ```
 
-The extension's identifier is `io.prismio`. It ships as one bundled file, `out/extension.js`, with no
+The extension's identifier is `Prismio.prismio` (publisher `Prismio`, the Marketplace publisher it is uploaded under). It ships as one bundled file, `out/extension.js`, with no
 `node_modules`; `test/package.test.mjs` holds the package to an allowlist.
 
 The TextMate grammar is generated from `prismio dump-tokens` and is never edited by hand;

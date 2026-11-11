@@ -55,5 +55,5 @@ test("the Prismio defaults: four spaces, and this extension formats", () => {
   const defaults = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).contributes.configurationDefaults["[prismio]"];
   assert.strictEqual(defaults["editor.tabSize"], 4);
   assert.strictEqual(defaults["editor.insertSpaces"], true);
-  assert.strictEqual(defaults["editor.defaultFormatter"], "io.prismio");
+  assert.strictEqual(defaults["editor.defaultFormatter"], "Prismio.prismio");
 });

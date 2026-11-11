@@ -542,7 +542,7 @@ test("the add-import quick fix clears the error, for a package module and a libr
 });
 
 test("restarting the server leaves it running, again and again", async () => {
-  const api = vscode.extensions.getExtension("io.prismio")!.exports as PrismioApi;
+  const api = vscode.extensions.getExtension("Prismio.prismio")!.exports as PrismioApi;
   assert.strictEqual(api.serverState, "running");
   const held = api.serverHeld;
   assert.ok(held > 0);
@@ -560,7 +560,7 @@ test("restarting the server leaves it running, again and again", async () => {
 });
 
 test("after a restart the diagnostics are back", async () => {
-  const api = vscode.extensions.getExtension("io.prismio")!.exports as PrismioApi;
+  const api = vscode.extensions.getExtension("Prismio.prismio")!.exports as PrismioApi;
   await withFiles({ "broken.psm": "fn main() -> Int {\n    return missing\n}\n" }, "broken.psm", async (doc) => {
     await until("the error", () => (vscode.languages.getDiagnostics(doc.uri).length > 0 ? true : undefined));
     await vscode.commands.executeCommand("prismio.restartServer");
@@ -571,14 +571,14 @@ test("after a restart the diagnostics are back", async () => {
 });
 
 test("the status bar item shows the toolchain's version and a running server", async () => {
-  const api = vscode.extensions.getExtension("io.prismio")!.exports as PrismioApi;
+  const api = vscode.extensions.getExtension("Prismio.prismio")!.exports as PrismioApi;
   const prismio = vscode.workspace.getConfiguration("prismio").get<string>("path", "");
   const version = /^prismio\s+(\S+)/.exec(execFileSync(prismio, ["--version"], { encoding: "utf8", env: { ...process.env, PRISMIO_INTERNAL_HOSTED: "1" } }))![1];
   await until("the version in the status item", () => (api.statusText === `$(check) Prismio ${version}` ? true : undefined));
 });
 
 test("a change to prismio.trace.server reaches the running server without a restart", async () => {
-  const api = vscode.extensions.getExtension("io.prismio")!.exports as PrismioApi;
+  const api = vscode.extensions.getExtension("Prismio.prismio")!.exports as PrismioApi;
   const config = vscode.workspace.getConfiguration("prismio");
   assert.strictEqual(api.serverTrace, "off");
   try {
@@ -596,7 +596,7 @@ async function runAll(): Promise<void> {
   main = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "main.psm"));
   editor = await vscode.window.showTextDocument(main);
   await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "shapes.psm"));
-  const extension = vscode.extensions.getExtension("io.prismio")!;
+  const extension = vscode.extensions.getExtension("Prismio.prismio")!;
   await extension.activate();
   await until("the first check", () => (vscode.languages.getDiagnostics(main.uri) !== undefined ? true : undefined));
   await sleep(4000);

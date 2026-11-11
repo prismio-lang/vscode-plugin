@@ -3,7 +3,7 @@
   "displayName": "Prismio",
   "description": "The Prismio language: diagnostics, completion, navigation and refactoring from the toolchain's own language server.",
   "version": "0.1.0",
-  "publisher": "io",
+  "publisher": "Prismio",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
   "repository": {
@@ -199,7 +199,7 @@
         "editor.tabSize": 4,
         "editor.insertSpaces": true,
         "editor.detectIndentation": false,
-        "editor.defaultFormatter": "io.prismio"
+        "editor.defaultFormatter": "Prismio.prismio"
       }
     }
   },
