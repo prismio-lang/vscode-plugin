@@ -187,16 +187,32 @@
           ]
         }
       }
-    ]
+    ],
+    "snippets": [
+      {
+        "language": "prismio",
+        "path": "./snippets/prismio.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[prismio]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false,
+        "editor.defaultFormatter": "prismio.prismio"
+      }
+    }
   },
   "scripts": {
     "grammar": "node scripts/generate-grammar.mjs",
     "compile": "tsc -p .",
     "watch": "tsc -watch -p .",
     "lint": "tsc -p . --noEmit",
-    "test:grammar": "node --test test/grammar.test.mjs",
+    "test:grammar": "node --test test/grammar.test.mjs test/ums-grammar.test.mjs",
     "test:package": "node --test test/package.test.mjs",
-    "test": "npm run compile && npm run test:grammar && npm run test:package && node out/test/runTests.js",
+    "test:config": "node --test test/language-configuration.test.mjs",
+    "test:unit": "node --test test/manifest.test.mjs test/pure.test.mjs test/problem-matcher.test.mjs test/snippets.test.mjs",
+    "test": "npm run compile && npm run test:grammar && npm run test:package && npm run test:config && npm run test:unit && node out/test/runTests.js",
     "package": "npm run compile && vsce package",
     "vscode:prepublish": "npm run compile"
   },
