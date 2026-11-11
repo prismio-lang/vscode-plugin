@@ -2,7 +2,20 @@
 // commands -- the same path a user's hover or F12 takes -- so a feature the server answers but the
 // client never wired up fails here. No test framework: a failure throws, and the run reports all.
 import * as assert from "node:assert";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
+import type { PrismioApi } from "../../src/extension";
+import { parseManifest } from "../../src/manifest";
+import { initProject } from "../../src/newProject";
+import { tasksFor } from "../../src/tasks";
+
+// The extension host's console is not always shown by the runner; PRISMIO_E2E_LOG names a file that gets the same lines.
+const report = (line: string) => {
+  console.log(line);
+  if (process.env.PRISMIO_E2E_LOG) { fs.appendFileSync(process.env.PRISMIO_E2E_LOG, line + "\n"); }
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -110,13 +123,166 @@ test("semantic tokens colour the declarations", async () => {
   assert.ok(tokens && tokens.data.length > 20 && tokens.data.length % 5 === 0, String(tokens?.data.length));
 });
 
-test("tasks come from build.ums", async () => {
+const folderNamed = (name: string) => vscode.workspace.workspaceFolders!.find((f) => f.name === name)!;
+const scopeName = (t: vscode.Task) => (typeof t.scope === "object" ? t.scope.name : "");
+
+test("tasks come from build.ums in every folder, and only what can run", async () => {
   const tasks = await vscode.tasks.fetchTasks({ type: "prismio" });
-  const names = tasks.map((t) => t.name);
-  assert.ok(names.includes("build") && names.includes("run demo") && names.includes("hello"), names.join(","));
+  const namesIn = (folder: string) => tasks.filter((t) => scopeName(t) === folder).map((t) => t.name).sort();
+  assert.deepStrictEqual(namesIn("demo"), ["build", "hello", "run demo"]);
+  // The second folder has a test target, which gets `test` and not `run`.
+  assert.deepStrictEqual(namesIn("second"), ["build", "run second", "test"]);
+  const manifest = parseManifest('targets {\n  executable("a") { entry = "a.psm" }\n  library("b") { entry = "b.psm" }\n  test("c") { entry = "c.psm" }\n  kernel("d") { entry = "d.psm" }\n}\n');
+  const offered = tasksFor(folderNamed("demo"), manifest, "prismio").map((t) => t.name);
+  assert.deepStrictEqual(offered, ["build", "test", "run a"]);
 });
 
-export async function run(): Promise<void> {
+test("a task of the second folder runs in the second folder", async () => {
+  const second = folderNamed("second");
+  const exitCode = new Promise<number | undefined>((resolve) => {
+    const listener = vscode.tasks.onDidEndTaskProcess((e) => {
+      if (scopeName(e.execution.task) === "second" && e.execution.task.name === "build") { listener.dispose(); resolve(e.exitCode); }
+    });
+  });
+  const build = (await vscode.tasks.fetchTasks({ type: "prismio" })).find((t) => scopeName(t) === "second" && t.name === "build")!;
+  await vscode.tasks.executeTask(build);
+  assert.strictEqual(await exitCode, 0);
+  assert.ok(fs.existsSync(path.join(second.uri.fsPath, ".prismio", "build", "debug", "second")), "built beside the second build.ums");
+});
+
+test("debugging starts with a build of the chosen folder's target", async () => {
+  const second = folderNamed("second");
+  const started = new Promise<vscode.Task>((resolve) => {
+    const listener = vscode.tasks.onDidStartTaskProcess((e) => { listener.dispose(); resolve(e.execution.task); });
+  });
+  void vscode.commands.executeCommand("prismio.debugTarget", second.uri.toString(), "second");
+  const task = await started;
+  assert.deepStrictEqual([scopeName(task), task.name], ["second", "build second"]);
+});
+
+test("a manifest error shows up as a diagnostic, from the server", async () => {
+  const ums = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, "build.ums"));
+  assert.strictEqual(ums.languageId, "ums");
+  const manifestEditor = await vscode.window.showTextDocument(ums);
+  try {
+    await sleep(3000);
+    assert.deepStrictEqual(vscode.languages.getDiagnostics(ums.uri), [], "the demo manifest should be clean");
+    await manifestEditor.edit((b) => b.insert(new vscode.Position(1, 0), "    nonsense = 1\n"));
+    const diagnostics = await until("the manifest error", () => { const d = vscode.languages.getDiagnostics(ums.uri); return d.length > 0 ? d : undefined; });
+    assert.ok(diagnostics.some((d) => /UMS\d+/.test(String(typeof d.code === "object" ? d.code.value : d.code))), JSON.stringify(diagnostics));
+    await vscode.commands.executeCommand("undo");
+    await until("clean again", () => (vscode.languages.getDiagnostics(ums.uri).length === 0 ? true : undefined));
+  } finally {
+    await vscode.window.showTextDocument(main);
+  }
+});
+
+test("run and debug code lenses sit above fn main and above the manifest's targets and commands", async () => {
+  const folder = vscode.workspace.workspaceFolders![0].uri;
+  const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", main.uri);
+  const mainLine = at(main, "fn main", "fn main").line;
+  const onMain = lenses.filter((l) => l.range.start.line === mainLine).map((l) => l.command?.title ?? "");
+  assert.ok(onMain.some((t) => t.includes("Run demo")) && onMain.some((t) => t.includes("Debug")), JSON.stringify(lenses.map((l) => [l.range.start.line, l.command?.title])));
+  assert.ok(lenses.every((l) => l.range.start.line === mainLine), "only fn main has lenses");
+  const shapes = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "shapes.psm"));
+  assert.deepStrictEqual(await vscode.commands.executeCommand("vscode.executeCodeLensProvider", shapes.uri), [], "shapes.psm is not an entry");
+
+  const ums = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "build.ums"));
+  const manifestLenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", ums.uri);
+  const titles = manifestLenses.map((l) => `${l.range.start.line}:${l.command?.title}`);
+  const targetLine = at(ums, "executable", "executable(").line;
+  const commandLine = at(ums, "command", "command(").line;
+  assert.ok(titles.some((t) => t.startsWith(`${targetLine}:`) && t.includes("Run demo")) && titles.some((t) => t.startsWith(`${targetLine}:`) && t.includes("Debug")), titles.join(" | "));
+  assert.ok(titles.some((t) => t.startsWith(`${commandLine}:`) && t.includes("Run hello")), titles.join(" | "));
+});
+
+test("the second folder gets its lenses too, and no Run on a test target", async () => {
+  const folder = folderNamed("second").uri;
+  const app = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "app.psm"));
+  const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", app.uri);
+  assert.ok(lenses.some((l) => l.command?.title.includes("Run second")), JSON.stringify(lenses.map((l) => l.command?.title)));
+  const ums = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "build.ums"));
+  const titles = (await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", ums.uri)).map((l) => l.command?.title ?? "");
+  assert.ok(titles.some((t) => t.includes("Run second")) && titles.some((t) => t.includes("Run tests")), titles.join(" | "));
+  assert.ok(!titles.some((t) => t.includes("Run checks")), "a test target has no Run: " + titles.join(" | "));
+});
+
+test("the snippets are offered", async () => {
+  const snip = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, "snip.psm");
+  await vscode.workspace.fs.writeFile(snip, Buffer.from("stru\n"));
+  const doc = await vscode.workspace.openTextDocument(snip);
+  await vscode.window.showTextDocument(doc);
+  try {
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>("vscode.executeCompletionItemProvider", doc.uri, new vscode.Position(0, 4));
+    const snippets = list.items.filter((i) => i.kind === vscode.CompletionItemKind.Snippet).map((i) => (typeof i.label === "string" ? i.label : i.label.label));
+    assert.ok(snippets.includes("struct"), snippets.join(",") || "no snippet at all");
+  } finally {
+    await vscode.window.showTextDocument(main);
+  }
+});
+
+test("Enter in a /// comment continues it", async () => {
+  const file = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, "enter.psm");
+  await vscode.workspace.fs.writeFile(file, Buffer.from("/// first\n"));
+  const doc = await vscode.workspace.openTextDocument(file);
+  const e = await vscode.window.showTextDocument(doc);
+  try {
+    e.selection = new vscode.Selection(0, 9, 0, 9);
+    await vscode.commands.executeCommand("type", { text: "\n" });
+    assert.strictEqual(doc.lineAt(1).text, "/// ", JSON.stringify(doc.getText()));
+  } finally {
+    await vscode.window.showTextDocument(main);
+  }
+});
+
+test("New Project writes what prismio init writes", async () => {
+  const prismio = vscode.workspace.getConfiguration("prismio").get<string>("path", "");
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "prismio-new-"));
+  try {
+    const folder = await initProject(prismio, parent, "fresh-app");
+    assert.strictEqual(folder, path.join(parent, "fresh-app"));
+    const manifest = fs.readFileSync(path.join(folder, "build.ums"), "utf8");
+    assert.ok(manifest.includes('name = "fresh-app"') && /prismio = "\d+\.\d+\.\d+/.test(manifest), manifest);
+    assert.ok(fs.existsSync(path.join(folder, "src", "main.psm")));
+    await assert.rejects(initProject(prismio, parent, "fresh-app"), /already exists/, "a second init in the same place says so");
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("restarting the server leaves it running, again and again", async () => {
+  const api = vscode.extensions.getExtension("prismio.prismio")!.exports as PrismioApi;
+  assert.strictEqual(api.serverState, "running");
+  const held = api.serverHeld;
+  assert.ok(held > 0);
+  for (let i = 0; i < 3; i++) {
+    await vscode.commands.executeCommand("prismio.restartServer");
+    await until("the server running again", () => (api.serverState === "running" ? true : undefined));
+  }
+  assert.strictEqual(api.serverHeld, held, "a restart must not leave listeners or watchers behind");
+  await sleep(3000);
+  const hovers = await until("a hover from the restarted server", async () => {
+    const h = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", main.uri, at(main, "add", "add(p.x"));
+    return h.length > 0 ? h : undefined;
+  });
+  assert.ok(hovers.length > 0);
+});
+
+test("a change to prismio.trace.server reaches the running server without a restart", async () => {
+  const api = vscode.extensions.getExtension("prismio.prismio")!.exports as PrismioApi;
+  const config = vscode.workspace.getConfiguration("prismio");
+  assert.strictEqual(api.serverTrace, "off");
+  try {
+    await config.update("trace.server", "verbose", vscode.ConfigurationTarget.Workspace);
+    await until("the trace to follow the setting", () => (api.serverTrace === "verbose" ? true : undefined));
+    assert.strictEqual(api.serverState, "running", "no restart was needed");
+  } finally {
+    await config.update("trace.server", undefined, vscode.ConfigurationTarget.Workspace);
+  }
+  await until("the trace to switch off", () => (api.serverTrace === "off" ? true : undefined));
+});
+
+async function runAll(): Promise<void> {
   const folder = vscode.workspace.workspaceFolders![0].uri;
   main = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "main.psm"));
   editor = await vscode.window.showTextDocument(main);
@@ -127,7 +293,11 @@ export async function run(): Promise<void> {
   await sleep(4000);
   const failures: string[] = [];
   for (const [name, body] of tests) {
-    try { await body(); console.log(`ok   ${name}`); } catch (error) { failures.push(name); console.log(`FAIL ${name}: ${String(error)}`); }
+    try { await body(); report(`ok   ${name}`); } catch (error) { failures.push(name); report(`FAIL ${name}: ${String(error)}`); }
   }
   if (failures.length > 0) { throw new Error(`${failures.length} of ${tests.length} failed: ${failures.join("; ")}`); }
+}
+
+export async function run(): Promise<void> {
+  try { await runAll(); } catch (error) { report(`ERROR ${String(error instanceof Error ? error.stack : error)}`); throw error; }
 }
