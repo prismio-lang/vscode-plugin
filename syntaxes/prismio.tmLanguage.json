@@ -7,6 +7,9 @@
       "include": "#comment"
     },
     {
+      "include": "#triple-string"
+    },
+    {
       "include": "#string"
     },
     {
@@ -33,8 +36,61 @@
   ],
   "repository": {
     "comment": {
-      "name": "comment.line.double-slash.prismio",
-      "match": "//.*$"
+      "patterns": [
+        {
+          "name": "comment.block.documentation.prismio",
+          "begin": "/\\*\\*(?![*/])",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "include": "#block-comment-body"
+            }
+          ]
+        },
+        {
+          "name": "comment.block.prismio",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "include": "#block-comment-body"
+            }
+          ]
+        },
+        {
+          "name": "comment.line.documentation.prismio",
+          "match": "///(?!/).*$"
+        },
+        {
+          "name": "comment.line.double-slash.prismio",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "block-comment-body": {
+      "patterns": [
+        {
+          "name": "comment.block.prismio",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "include": "#block-comment-body"
+            }
+          ]
+        }
+      ]
+    },
+    "triple-string": {
+      "name": "string.quoted.triple.prismio",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "patterns": [
+        {
+          "match": "\\\\(?:x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]{1,6}\\}|[nrt0\\\\\"'])",
+          "name": "constant.character.escape.prismio"
+        }
+      ]
     },
     "string": {
       "name": "string.quoted.double.prismio",

@@ -50,6 +50,8 @@ test("a sample is coloured as the language reads it", async () => {
   has("    if a and not b { }", "and", "keyword.operator.word.prismio");
   has("    let s = \"a\\n\"", "\\n", "constant.character.escape.prismio");
   has("// a comment", "// a comment", "comment.line.double-slash.prismio");
+  has("/// doc line", "/// doc line", "comment.line.documentation.prismio");
+  has("//// not documentation", "//// not documentation", "comment.line.double-slash.prismio");
   has("let ok = true", "true", "constant.language.prismio");
   has("public struct Point {", "Point", "entity.name.type.prismio");
   has("asm \"nop\"", "asm", "storage.type.prismio");
@@ -71,4 +73,28 @@ test("the extension and each language have an icon, and the files exist and ship
   const header = readFileSync(join(root, manifest.icon));
   assert.strictEqual(header.readUInt32BE(16), 128, "the extension icon is 128 px wide");
   assert.ok(!read(".vscodeignore").split("\n").some((line) => line.trim().startsWith("images")), "images/ is shipped");
+});
+
+test("block comments nest and span lines, and documentation comments are told apart", async () => {
+  const { loadGrammar } = await import("./textmate.mjs");
+  const { tokenize } = await loadGrammar("source.prismio", "prismio.tmLanguage.json");
+  const lines = tokenize("/* outer /* inner */ still comment */ let x = 1\n/* a\n   b */ fn f() {}\n/** doc\n * more */\n/**/ let y = 2\n/***/ let z = 3");
+  const is = (line, text, scope) => assert.ok(lines[line].some(([t, , scopes]) => t.includes(text) && scopes.includes(scope)),
+    `${text} should be in ${scope} on line ${line}: ${JSON.stringify(lines[line].map((t) => [t[0], t[1]]))}`);
+  const isNot = (line, text, scope) => assert.ok(!lines[line].some(([t, , scopes]) => t.includes(text) && scopes.includes(scope)), `${text} should not be ${scope}`);
+  is(0, "still comment", "comment.block.prismio");
+  is(0, "let", "source.prismio");
+  isNot(0, "let", "comment.block.prismio");
+  is(1, "a", "comment.block.prismio");
+  is(2, "b", "comment.block.prismio");
+  isNot(2, "fn", "comment.block.prismio");
+  is(3, "doc", "comment.block.documentation.prismio");
+  is(4, "more", "comment.block.documentation.prismio");
+  isNot(5, "/*", "comment.block.documentation.prismio");
+  is(5, "/*", "comment.block.prismio");
+  isNot(6, "/*", "comment.block.documentation.prismio");
+  isNot(5, "let", "comment.block.prismio");
+  const triple = tokenize('let s = """one\ntwo"""\nlet t = 1');
+  assert.ok(triple[1][0][2].includes("string.quoted.triple.prismio"), "a triple-quoted string spans lines");
+  assert.strictEqual(triple[2][0][1], "storage.type.prismio");
 });
