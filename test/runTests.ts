@@ -1,6 +1,6 @@
 // Runs test/suite inside a real VS Code (the installed one by default) with this extension loaded
 // and throwaway copies of the demo and second projects open as one workspace, so the extension is exercised against the real
-// toolchain: `PRISMIO=/path/to/prismio npm test`. `VSCODE_PATH` names another VS Code executable.
+// toolchain: `PRISMIO=/path/to/prismio pnpm test`. `VSCODE_PATH` names another VS Code executable.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";

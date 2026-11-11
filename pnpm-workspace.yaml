@@ -1,0 +1,6 @@
+# This repository is its own pnpm workspace root, so pnpm does not join a pnpm-workspace.yaml further up the tree.
+allowBuilds:
+  esbuild: true
+  # Only vsce publish and sign use these; packaging does not.
+  keytar: false
+  "@vscode/vsce-sign": false

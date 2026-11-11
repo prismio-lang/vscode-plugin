@@ -41,14 +41,21 @@ compiler's token tables) and says so.
 
 ## Developing it
 
+The repository uses [pnpm](https://pnpm.io) (`packageManager` in `package.json`; it is its own pnpm
+workspace root, so it never joins a `pnpm-workspace.yaml` further up the tree):
+
 ```bash
-npm install
-npm run compile
-npm run grammar                      # regenerate syntaxes/ from the committed token tables
-PRISMIO=/path/to/prismio npm run grammar -- --refresh   # after the compiler's tokens change
-PRISMIO=/path/to/prismio npm test    # grammar tests, then the end-to-end suite in a real VS Code
-npm run package                      # the .vsix
+pnpm install
+pnpm run compile                     # tsc, for the tests
+pnpm run bundle                      # esbuild: the extension and its dependencies in out/extension.js
+pnpm run grammar                     # regenerate syntaxes/ from the committed token tables
+PRISMIO=/path/to/prismio pnpm run grammar --refresh   # after the compiler's tokens change
+PRISMIO=/path/to/prismio pnpm test   # every test, then the end-to-end suite in a real VS Code
+pnpm run package                     # prismio-vscode-<version>.vsix
 ```
+
+The extension's identifier is `io.prismio`. It ships as one bundled file, `out/extension.js`, with no
+`node_modules`; `test/package.test.mjs` holds the package to an allowlist.
 
 The TextMate grammar is generated from `prismio dump-tokens` and is never edited by hand;
 `test/grammar.test.mjs` fails if it is stale. The end-to-end suite starts the installed VS Code with

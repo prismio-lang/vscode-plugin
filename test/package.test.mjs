@@ -17,22 +17,21 @@ const ALLOWED = [
   /^snippets\/[A-Za-z0-9_.-]+\.json$/,
   /^syntaxes\/(prismio|ums)\.tmLanguage\.json$/,
   /^images\/[A-Za-z0-9_.-]+\.(png|svg)$/,
-  /^out\/src\/[A-Za-z0-9_./-]+\.js$/,
-  // The runtime dependencies, which are not bundled.
-  /^node_modules\//,
+  // The extension and its dependencies, bundled by esbuild into one file: no node_modules ships.
+  /^out\/extension\.js$/,
 ];
 
 test("the .vsix carries only what the extension loads", () => {
-  const listed = execFileSync("npx", ["--no-install", "vsce", "ls"], { cwd: root, encoding: "utf8" })
+  const listed = execFileSync("pnpm", ["exec", "vsce", "ls", "--no-dependencies"], { cwd: root, encoding: "utf8", shell: process.platform === "win32" })
     .split("\n").map((l) => l.trim()).filter((l) => l !== "");
-  assert.ok(listed.includes("package.json") && listed.includes("out/src/extension.js"), listed.slice(0, 20).join("\n"));
+  assert.ok(listed.includes("package.json") && listed.includes("out/extension.js"), listed.slice(0, 20).join("\n"));
   const stray = listed.filter((file) => !ALLOWED.some((pattern) => pattern.test(file)));
   assert.deepStrictEqual(stray, [], `files that would ship but are not on the allowlist:\n${stray.join("\n")}`);
   assert.ok(!listed.some((file) => !file.startsWith("node_modules/") && file.endsWith(".map")), "source maps ship");
 });
 
 test("everything the manifest points at ships", () => {
-  const listed = new Set(execFileSync("npx", ["--no-install", "vsce", "ls"], { cwd: root, encoding: "utf8" }).split("\n").map((l) => l.trim()));
+  const listed = new Set(execFileSync("pnpm", ["exec", "vsce", "ls", "--no-dependencies"], { cwd: root, encoding: "utf8", shell: process.platform === "win32" }).split("\n").map((l) => l.trim()));
   const wanted = [manifest.main, manifest.icon];
   for (const language of manifest.contributes.languages) { wanted.push(language.configuration, language.icon.light, language.icon.dark); }
   for (const grammar of manifest.contributes.grammars ?? []) { wanted.push(grammar.path); }

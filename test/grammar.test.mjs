@@ -15,12 +15,12 @@ const require = createRequire(import.meta.url);
 
 test("the grammar is what the generator makes of the committed tokens", () => {
   const generated = JSON.stringify(buildGrammar(JSON.parse(read("syntaxes/tokens.json"))), null, 2) + "\n";
-  assert.strictEqual(read("syntaxes/prismio.tmLanguage.json"), generated, "stale: run `npm run grammar`");
+  assert.strictEqual(read("syntaxes/prismio.tmLanguage.json"), generated, "stale: run `pnpm run grammar`");
 });
 
 test("the committed tokens are what the compiler says now", { skip: process.env.PRISMIO ? false : "set PRISMIO to compare with a compiler" }, () => {
   assert.deepStrictEqual(JSON.parse(read("syntaxes/tokens.json")), dumpTokens(process.env.PRISMIO),
-    "the compiler's token tables changed: run `PRISMIO=... npm run grammar -- --refresh`");
+    "the compiler's token tables changed: run `PRISMIO=... pnpm run grammar --refresh`");
 });
 
 test("the tables are not empty (a vacuous grammar passes everything)", () => {

@@ -5,11 +5,14 @@ test/**
 scripts/**
 tsconfig.json
 **/*.map
-node_modules/.bin/**
+node_modules/**
 out/test/**
+out/src/**
 .idea/**
 .gitignore
 .github/**
-package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+.npmrc
 syntaxes/tokens.json
 *.vsix

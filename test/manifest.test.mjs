@@ -1,5 +1,5 @@
 // What the extension reads out of build.ums to offer tasks, lenses and the debug entry. Loads the compiled
-// module (run `npm run compile` first; `npm test` does).
+// module (run `pnpm run compile` first; `pnpm test` does).
 import assert from "node:assert";
 import { test } from "node:test";
 import { parseManifest, runnable } from "../out/src/manifest.js";

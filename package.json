@@ -3,7 +3,7 @@
   "displayName": "Prismio",
   "description": "The Prismio language: diagnostics, completion, navigation and refactoring from the toolchain's own language server.",
   "version": "0.1.0",
-  "publisher": "prismio",
+  "publisher": "io",
   "icon": "images/icon.png",
   "license": "Apache-2.0",
   "repository": {
@@ -18,7 +18,7 @@
     "Linters",
     "Formatters"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:prismio",
     "onLanguage:ums",
@@ -199,22 +199,23 @@
         "editor.tabSize": 4,
         "editor.insertSpaces": true,
         "editor.detectIndentation": false,
-        "editor.defaultFormatter": "prismio.prismio"
+        "editor.defaultFormatter": "io.prismio"
       }
     }
   },
   "scripts": {
     "grammar": "node scripts/generate-grammar.mjs",
     "compile": "tsc -p .",
+    "bundle": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --minify --outfile=out/extension.js",
     "watch": "tsc -watch -p .",
     "lint": "tsc -p . --noEmit",
     "test:grammar": "node --test test/grammar.test.mjs test/ums-grammar.test.mjs",
     "test:package": "node --test test/package.test.mjs",
     "test:config": "node --test test/language-configuration.test.mjs",
     "test:unit": "node --test test/manifest.test.mjs test/pure.test.mjs test/problem-matcher.test.mjs test/snippets.test.mjs",
-    "test": "npm run compile && npm run test:grammar && npm run test:package && npm run test:config && npm run test:unit && node out/test/runTests.js",
-    "package": "npm run compile && vsce package",
-    "vscode:prepublish": "npm run compile"
+    "test": "pnpm run compile && pnpm run bundle && pnpm run test:grammar && pnpm run test:package && pnpm run test:config && pnpm run test:unit && node out/test/runTests.js",
+    "package": "node scripts/package.mjs",
+    "vscode:prepublish": "pnpm run bundle"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -224,8 +225,10 @@
     "@types/vscode": "^1.100.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.6.0",
-    "vscode-textmate": "^9.2.0",
-    "vscode-oniguruma": "^2.0.1"
-  }
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.2.0"
+  },
+  "packageManager": "pnpm@11.20.0"
 }

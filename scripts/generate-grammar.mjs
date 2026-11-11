@@ -116,7 +116,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     let current = "";
     try { current = readFileSync(grammarPath, "utf8"); } catch { /* missing counts as stale */ }
     if (current !== text) {
-      console.error("syntaxes/prismio.tmLanguage.json is stale: run `npm run grammar`");
+      console.error("syntaxes/prismio.tmLanguage.json is stale: run `pnpm run grammar`");
       process.exit(1);
     }
   } else {
