@@ -102,6 +102,14 @@
       {
         "command": "prismio.debugTarget",
         "title": "Prismio: Build and Debug a Target"
+      },
+      {
+        "command": "prismio.newProject",
+        "title": "Prismio: New Project"
+      },
+      {
+        "command": "prismio.runTarget",
+        "title": "Prismio: Run an Executable Target"
       }
     ],
     "taskDefinitions": [
