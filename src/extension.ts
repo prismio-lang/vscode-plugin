@@ -20,16 +20,17 @@ let server: Server | undefined;
 const folderOf = (uri: string) => vscode.workspace.getWorkspaceFolder(vscode.Uri.parse(uri));
 
 // What the end-to-end suite asks of a running extension.
-export interface PrismioApi { readonly serverState: string; readonly serverHeld: number; readonly serverTrace: string }
+export interface PrismioApi { readonly serverState: string; readonly serverHeld: number; readonly serverTrace: string; readonly statusText: string }
 
 export async function activate(context: vscode.ExtensionContext): Promise<PrismioApi> {
   const output = vscode.window.createOutputChannel("Prismio");
   server = new Server(output);
+  const statusBar = new StatusBar(server);
   const lenses = new PrismioCodeLenses();
   context.subscriptions.push(
     output,
     server,
-    new StatusBar(server),
+    statusBar,
     lenses,
     vscode.languages.registerCodeLensProvider([{ language: "prismio" }, { language: "ums" }], lenses),
     vscode.tasks.registerTaskProvider("prismio", taskProvider),
@@ -60,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Prismi
     get serverState() { return server?.state ?? "stopped"; },
     get serverHeld() { return server?.held ?? 0; },
     get serverTrace() { return server?.trace ?? "off"; },
+    get statusText() { return statusBar.text; },
   };
 }
 

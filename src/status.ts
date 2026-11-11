@@ -24,6 +24,11 @@ export class StatusBar implements vscode.Disposable {
         this.render();
     }
 
+    // What the item shows, for the end-to-end suite.
+    get text(): string {
+        return this.item.text;
+    }
+
     private async refreshVersion(): Promise<void> {
         const prismio = prismioPath();
         this.version = prismio ? await toolchainVersion(prismio) : undefined;

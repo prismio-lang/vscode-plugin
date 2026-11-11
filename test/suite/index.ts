@@ -2,6 +2,7 @@
 // commands -- the same path a user's hover or F12 takes -- so a feature the server answers but the
 // client never wired up fails here. No test framework: a failure throws, and the run reports all.
 import * as assert from "node:assert";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -244,10 +245,272 @@ test("New Project writes what prismio init writes", async () => {
     const manifest = fs.readFileSync(path.join(folder, "build.ums"), "utf8");
     assert.ok(manifest.includes('name = "fresh-app"') && /prismio = "\d+\.\d+\.\d+/.test(manifest), manifest);
     assert.ok(fs.existsSync(path.join(folder, "src", "main.psm")));
+    // The new project's entry compiles and links.
+    execFileSync(prismio, ["build"], { cwd: folder, env: { ...process.env, PRISMIO_INTERNAL_HOSTED: "1" }, encoding: "utf8" });
+    assert.ok(fs.existsSync(path.join(folder, ".prismio", "build", "debug", "fresh-app")), "the built program");
     await assert.rejects(initProject(prismio, parent, "fresh-app"), /already exists/, "a second init in the same place says so");
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
+});
+
+// ---- What the server provides, asked of the editor as a user's actions would ask it ----
+
+const label = (item: vscode.CompletionItem) => (typeof item.label === "string" ? item.label : item.label.label);
+const hoverText = (hovers: vscode.Hover[]) => hovers.flatMap((h) => h.contents).map((c) => (typeof c === "string" ? c : c.value)).join("\n");
+const folderUri = () => vscode.workspace.workspaceFolders![0].uri;
+
+// A file written into the workspace, opened and shown, then closed and removed whatever the body does.
+async function withFiles<T>(files: Record<string, string>, shown: string, body: (doc: vscode.TextDocument) => Promise<T>): Promise<T> {
+  for (const [name, text] of Object.entries(files)) { await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(folderUri(), name), Buffer.from(text)); }
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folderUri(), shown));
+  await vscode.window.showTextDocument(doc);
+  try {
+    return await body(doc);
+  } finally {
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    for (const name of Object.keys(files)) { await vscode.workspace.fs.delete(vscode.Uri.joinPath(folderUri(), name)).then(undefined, () => undefined); }
+    await vscode.window.showTextDocument(main);
+  }
+}
+
+// Completion at a position, retried until the server has analysed the file well enough to offer `wanted`.
+const completions = (doc: vscode.TextDocument, line: number, character: number, wanted: string, trigger?: string) =>
+  until(`a completion named ${wanted}`, async () => {
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>("vscode.executeCompletionItemProvider", doc.uri, new vscode.Position(line, character), trigger);
+    return list.items.some((i) => label(i) === wanted) ? list.items : undefined;
+  });
+
+// The sample the position-based checks share: a function with two parameters, locals, a struct from another file.
+const SAMPLE = [
+  "import shapes", "", "fn helper(first: Int, second: Int) -> Int {", "    return first + second", "}", "",
+  "fn main() -> Int {", "    let count = 1", "    let p = Point { x: 1, y: 2 }", "    let r = helper(count, 2)",
+  "    let z = count", "    return r + z + p.x", "}", "",
+].join("\n");
+
+let sample: vscode.TextDocument | undefined;
+async function sampleDoc(): Promise<vscode.TextDocument> {
+  if (!sample) {
+    const uri = vscode.Uri.joinPath(folderUri(), "features.psm");
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(SAMPLE));
+    sample = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(sample);
+    await until("the sample to analyse clean", async () => {
+      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", uri, new vscode.Position(7, 10));
+      return hovers.length > 0 && vscode.languages.getDiagnostics(uri).length === 0 ? true : undefined;
+    });
+  }
+  return sample;
+}
+
+// Replace one line while `body` runs, then put it back.
+async function withLine<T>(doc: vscode.TextDocument, line: number, text: string, body: () => Promise<T>): Promise<T> {
+  const original = doc.lineAt(line).text;
+  const range = () => doc.lineAt(line).range;
+  const swap = async (to: string) => { const e = new vscode.WorkspaceEdit(); e.replace(doc.uri, range(), to); await vscode.workspace.applyEdit(e); };
+  await swap(text);
+  try { return await body(); } finally { await swap(original); }
+}
+
+test("completion offers the names in scope: locals, functions and types", async () => {
+  const doc = await sampleDoc();
+  await withLine(doc, 10, "    let z = cou", async () => {
+    const items = await completions(doc, 10, 15, "count");
+    const byLabel = (name: string) => items.find((i) => label(i) === name)!;
+    assert.deepStrictEqual([byLabel("count").kind, byLabel("count").detail], [vscode.CompletionItemKind.Variable, "Int"]);
+    assert.strictEqual(byLabel("p").detail, "Point");
+    assert.deepStrictEqual([byLabel("helper").kind, byLabel("helper").detail], [vscode.CompletionItemKind.Function, "fn helper(first: Int, second: Int) -> Int"]);
+    assert.strictEqual(byLabel("Point").kind, vscode.CompletionItemKind.Struct);
+    assert.ok(!byLabel("count").additionalTextEdits?.length, "a local needs no import");
+  });
+});
+
+test("completion offers a library function that is not imported, and accepting it adds the import", async () => {
+  await withFiles({ "lib-completion.psm": "fn main() -> Int {\n    let n = 1\n    pri\n    return 0\n}\n" }, "lib-completion.psm", async (doc) => {
+    const items = await completions(doc, 2, 7, "println");
+    const item = items.find((i) => label(i) === "println")!;
+    assert.strictEqual(item.kind, vscode.CompletionItemKind.Function);
+    assert.ok(String(item.detail).includes("fn println"), String(item.detail));
+    assert.deepStrictEqual((item.additionalTextEdits ?? []).map((e) => e.newText), ["import std.io\n"]);
+    const inserted = typeof item.insertText === "object" ? item.insertText.value : (item.insertText ?? label(item));
+    assert.ok(inserted.startsWith("println"), inserted);
+    // Accepting it: the word becomes the call, and the item's own edits ride along.
+    const accept = new vscode.WorkspaceEdit();
+    accept.replace(doc.uri, new vscode.Range(2, 4, 2, 7), "println(n)");
+    await vscode.workspace.applyEdit(accept);
+    await until("println to be unknown without its import", () => (vscode.languages.getDiagnostics(doc.uri).some((d) => d.message.includes("println")) ? true : undefined));
+    const imports = new vscode.WorkspaceEdit();
+    for (const e of item.additionalTextEdits ?? []) { imports.replace(doc.uri, e.range, e.newText); }
+    await vscode.workspace.applyEdit(imports);
+    assert.ok(doc.getText().includes("import std.io\n"), doc.getText());
+    await until("the file to compile clean", () => (vscode.languages.getDiagnostics(doc.uri).length === 0 ? true : undefined));
+  });
+});
+
+test("completion on an import line offers modules", async () => {
+  await withFiles({ "imports.psm": "import st\n\nfn main() -> Int {\n    return 0\n}\n" }, "imports.psm", async (doc) => {
+    const items = await completions(doc, 0, 9, "std.io");
+    const labels = items.map(label);
+    assert.ok(["std.io", "std.string", "shapes"].every((l) => labels.includes(l)), labels.slice(0, 30).join(","));
+    assert.ok(items.filter((i) => ["std.io", "shapes"].includes(label(i))).every((i) => i.kind === vscode.CompletionItemKind.Module));
+    const e = new vscode.WorkspaceEdit();
+    e.replace(doc.uri, doc.lineAt(0).range, "import std.");
+    await vscode.workspace.applyEdit(e);
+    const members = await completions(doc, 0, 11, "io", ".");
+    assert.ok(["io", "string", "vec"].every((l) => members.map(label).includes(l)), members.map(label).slice(0, 30).join(","));
+  });
+});
+
+test("completion offers type names where a type is written", async () => {
+  const text = "import shapes\n\nfn helper(first: In) -> Po {\n    return first\n}\n\nfn main() -> Int {\n    let q: Po = 1\n    return 0\n}\n";
+  await withFiles({ "types.psm": text }, "types.psm", async (doc) => {
+    const spots: [number, number, string][] = [[2, 19, "a parameter's type"], [2, 26, "a return type"], [7, 13, "a let's type"]];
+    for (const [line, character, where] of spots) {
+      const items = await completions(doc, line, character, "Point");
+      const labels = items.map(label);
+      assert.strictEqual(items.find((i) => label(i) === "Point")!.kind, vscode.CompletionItemKind.Struct, where);
+      assert.ok(["Int", "String", "Vec"].every((l) => labels.includes(l)), `${where}: ${labels.slice(0, 30).join(",")}`);
+    }
+  });
+});
+
+test("completion in build.ums offers blocks and keys", async () => {
+  const folder = folderUri();
+  const ums = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, "build.ums"));
+  await vscode.window.showTextDocument(ums);
+  const offer = async (line: number, text: string, wanted: string) => {
+    const insert = new vscode.WorkspaceEdit();
+    insert.insert(ums.uri, new vscode.Position(line, 0), text + "\n");
+    await vscode.workspace.applyEdit(insert);
+    try { return await completions(ums, line, text.length, wanted); } finally {
+      const remove = new vscode.WorkspaceEdit();
+      remove.delete(ums.uri, new vscode.Range(line, 0, line + 1, 0));
+      await vscode.workspace.applyEdit(remove);
+    }
+  };
+  try {
+    const at0 = await offer(0, "ta", "targets");
+    assert.ok(["project", "targets", "commands", "profiles", "dependencies"].every((l) => at0.map(label).includes(l)), at0.map(label).join(","));
+    assert.ok(at0.find((i) => label(i) === "targets")!.detail, "a block comes with its description");
+    const inProject = await offer(2, "    na", "name");
+    assert.ok(["name", "version", "description", "license"].every((l) => inProject.map(label).includes(l)), inProject.map(label).join(","));
+    assert.strictEqual(inProject.find((i) => label(i) === "name")!.kind, vscode.CompletionItemKind.Property);
+    const inTarget = await offer(8, "        en", "entry");
+    assert.ok(["entry", "freestanding", "triple"].every((l) => inTarget.map(label).includes(l)), inTarget.map(label).join(","));
+  } finally {
+    await vscode.window.showTextDocument(main);
+  }
+});
+
+test("signature help names the function and follows the argument", async () => {
+  const doc = await sampleDoc();
+  const callLine = at(doc, "helper(count", "let r");
+  const spots: [number, number, string][] = [[callLine.character + 7, 0, "first: Int"], [callLine.character + 14, 1, "second: Int"]];
+  for (const [column, active, parameter] of spots) {
+    const help = await until("signature help", async () => {
+      const h = await vscode.commands.executeCommand<vscode.SignatureHelp>("vscode.executeSignatureHelpProvider", doc.uri, new vscode.Position(callLine.line, column), "(");
+      return h && h.signatures.length > 0 ? h : undefined;
+    });
+    const signature = help.signatures[help.activeSignature];
+    assert.strictEqual(signature.label, "fn helper(first: Int, second: Int) -> Int");
+    assert.strictEqual(help.activeParameter, active, `column ${column}`);
+    const [from, to] = signature.parameters[help.activeParameter].label as [number, number];
+    assert.strictEqual(signature.label.slice(from, to), parameter);
+  }
+});
+
+test("inlay hints show the type of a let and the parameter names at a call", async () => {
+  const doc = await sampleDoc();
+  const hints = await until("inlay hints", async () => {
+    const h = await vscode.commands.executeCommand<vscode.InlayHint[]>("vscode.executeInlayHintProvider", doc.uri, new vscode.Range(0, 0, doc.lineCount, 0));
+    return h.length > 0 ? h : undefined;
+  });
+  const shown = hints.map((h) => `${h.position.line}:${h.position.character} ${typeof h.label === "string" ? h.label : h.label.map((p) => p.value).join("")} ${h.kind === vscode.InlayHintKind.Parameter ? "param" : "type"}`).sort();
+  const callLine = at(doc, "helper(count", "let r");
+  assert.deepStrictEqual(shown, [
+    "7:13 : Int type", "8:9 : Point type", "9:9 : Int type", `9:${callLine.character + 7} first: param`, `9:${callLine.character + 14} second: param`, "10:9 : Int type",
+  ].sort());
+});
+
+test("document highlights mark the declaration as written and the uses as read", async () => {
+  const doc = await sampleDoc();
+  const found = await vscode.commands.executeCommand<vscode.DocumentHighlight[]>("vscode.executeDocumentHighlights", doc.uri, at(doc, "count", "let count"));
+  const shown = found.map((h) => `${h.range.start.line}:${h.range.start.character} ${h.kind === vscode.DocumentHighlightKind.Write ? "write" : "read"}`).sort();
+  assert.deepStrictEqual(shown, ["10:12 read", "7:8 write", `9:${at(doc, "count", "helper(count").character} read`].sort());
+});
+
+test("workspace symbols find functions and types across files", async () => {
+  await sampleDoc();
+  const find = async (query: string, name: string) => until(`${name} among the symbols`, async () => {
+    const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", query);
+    return symbols.find((s) => s.name === name);
+  });
+  const point = await find("Poin", "Point");
+  assert.deepStrictEqual([point.kind, path.basename(point.location.uri.fsPath), point.location.range.start.line], [vscode.SymbolKind.Struct, "shapes.psm", 0]);
+  const helper = await find("help", "helper");
+  assert.deepStrictEqual([helper.kind, path.basename(helper.location.uri.fsPath)], [vscode.SymbolKind.Function, "features.psm"]);
+  const add = await find("add", "add");
+  assert.strictEqual(path.basename(add.location.uri.fsPath), "main.psm");
+});
+
+test("go to type definition leads from a value to its struct", async () => {
+  const doc = await sampleDoc();
+  const found = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>("vscode.executeTypeDefinitionProvider", doc.uri, at(doc, "p", "p.x"));
+  assert.strictEqual(found.length, 1, JSON.stringify(found));
+  const location = "targetUri" in found[0] ? { uri: found[0].targetUri, range: found[0].targetSelectionRange ?? found[0].targetRange } : found[0];
+  assert.deepStrictEqual([path.basename(location.uri.fsPath), location.range.start.line, location.range.start.character], ["shapes.psm", 0, 14]);
+});
+
+test("folding ranges cover each function body", async () => {
+  const doc = await sampleDoc();
+  const ranges = await vscode.commands.executeCommand<vscode.FoldingRange[]>("vscode.executeFoldingRangeProvider", doc.uri);
+  assert.deepStrictEqual(ranges.map((r) => [r.start, r.end]).sort((a, b) => a[0] - b[0]), [[2, 3], [6, 11]]);
+});
+
+test("range formatting changes the lines asked for and leaves the rest", async () => {
+  const messy = "fn  one( ) {\nlet a=1\n   return  a\n}\n\nfn  two( ) {\nlet b=2\n   return  b\n}\n";
+  await withFiles({ "range.psm": messy }, "range.psm", async (doc) => {
+    const edits = await until("range formatting edits", async () => {
+      const e = await vscode.commands.executeCommand<vscode.TextEdit[]>("vscode.executeFormatRangeProvider", doc.uri, new vscode.Range(0, 0, 3, 1), { tabSize: 4, insertSpaces: true });
+      return e && e.length > 0 ? e : undefined;
+    });
+    const apply = new vscode.WorkspaceEdit();
+    apply.set(doc.uri, edits);
+    await vscode.workspace.applyEdit(apply);
+    assert.strictEqual(doc.getText(), "fn one() {\n    let a = 1\n    return a\n}\n\nfn  two( ) {\nlet b=2\n   return  b\n}\n");
+  });
+});
+
+test("hover on a library name shows the standard library's signature and comment", async () => {
+  const hovers = await until("the library hover", async () => {
+    const h = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", main.uri, at(main, "println", "println(n"));
+    return h.length > 0 ? h : undefined;
+  });
+  const text = hoverText(hovers);
+  assert.ok(text.includes("public fn println<Ts: ConsoleText>(...args: Ts)") && text.includes("Prints each argument"), text);
+});
+
+test("the add-import quick fix clears the error, for a package module and a library one", async () => {
+  const files = {
+    "helpers.psm": "public fn triple(n: Int) -> Int {\n    return n * 3\n}\n",
+    "middle.psm": "import helpers\nimport std.io\n\npublic fn viaMiddle() -> Int {\n    println(1)\n    return triple(1)\n}\n",
+    "quickfix.psm": "import middle\n\nfn main() -> Int {\n    let a = triple(2)\n    println(viaMiddle())\n    return a\n}\n",
+  };
+  await withFiles(files, "quickfix.psm", async (doc) => {
+    const diagnostics = await until("both missing imports reported", () => { const d = vscode.languages.getDiagnostics(doc.uri); return d.length === 2 ? d : undefined; });
+    assert.ok(diagnostics.some((d) => d.message.includes("`triple` is declared in `helpers`")), JSON.stringify(diagnostics.map((d) => d.message)));
+    const offered: string[] = [];
+    for (const diagnostic of diagnostics) {
+      const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>("vscode.executeCodeActionProvider", doc.uri, diagnostic.range, vscode.CodeActionKind.QuickFix.value);
+      const fix = actions.find((a) => a.title.startsWith("Add `import"));
+      assert.ok(fix && fix.edit, `no add-import fix for: ${diagnostic.message}\n${JSON.stringify(actions.map((a) => a.title))}`);
+      offered.push(fix.title);
+      await vscode.workspace.applyEdit(fix.edit);
+    }
+    assert.deepStrictEqual(offered.sort(), ["Add `import helpers`", "Add `import std.io`"]);
+    assert.ok(doc.getText().includes("import helpers\n") && doc.getText().includes("import std.io\n"), doc.getText());
+    await until("the file to compile clean", () => (vscode.languages.getDiagnostics(doc.uri).length === 0 ? true : undefined));
+  });
 });
 
 test("restarting the server leaves it running, again and again", async () => {
@@ -266,6 +529,24 @@ test("restarting the server leaves it running, again and again", async () => {
     return h.length > 0 ? h : undefined;
   });
   assert.ok(hovers.length > 0);
+});
+
+test("after a restart the diagnostics are back", async () => {
+  const api = vscode.extensions.getExtension("prismio.prismio")!.exports as PrismioApi;
+  await withFiles({ "broken.psm": "fn main() -> Int {\n    return missing\n}\n" }, "broken.psm", async (doc) => {
+    await until("the error", () => (vscode.languages.getDiagnostics(doc.uri).length > 0 ? true : undefined));
+    await vscode.commands.executeCommand("prismio.restartServer");
+    await until("the server running", () => (api.serverState === "running" ? true : undefined));
+    const again = await until("the error again", () => { const d = vscode.languages.getDiagnostics(doc.uri); return d.length > 0 ? d : undefined; });
+    assert.ok(again.some((d) => d.source === "prismio" && d.message.includes("missing")), JSON.stringify(again.map((d) => d.message)));
+  });
+});
+
+test("the status bar item shows the toolchain's version and a running server", async () => {
+  const api = vscode.extensions.getExtension("prismio.prismio")!.exports as PrismioApi;
+  const prismio = vscode.workspace.getConfiguration("prismio").get<string>("path", "");
+  const version = /^prismio\s+(\S+)/.exec(execFileSync(prismio, ["--version"], { encoding: "utf8", env: { ...process.env, PRISMIO_INTERNAL_HOSTED: "1" } }))![1];
+  await until("the version in the status item", () => (api.statusText === `$(check) Prismio ${version}` ? true : undefined));
 });
 
 test("a change to prismio.trace.server reaches the running server without a restart", async () => {
