@@ -113,9 +113,32 @@ export async function runTask(folder: vscode.WorkspaceFolder, def: PrismioTaskDe
     await vscode.tasks.executeTask(makeTask(folder, def, prismio));
 }
 
+// The debugger the user has: CodeLLDB, else the C/C++ extension's. Without either there is nothing to start.
+export function debuggerType(): "lldb" | "cppdbg" | undefined {
+    if (vscode.extensions.getExtension("vadimcn.vscode-lldb")) {
+        return "lldb";
+    }
+    return vscode.extensions.getExtension("ms-vscode.cpptools") ? "cppdbg" : undefined;
+}
+
+async function offerDebugger(): Promise<void> {
+    const install = "Install CodeLLDB";
+    const choice = await vscode.window.showErrorMessage(
+        "Prismio: debugging needs a debugger extension. Install CodeLLDB (or the C/C++ extension), then try again.", install);
+    if (choice === install) {
+        await vscode.commands.executeCommand("extension.open", "vadimcn.vscode-lldb");
+    }
+}
+
 // Builds a target in the debug profile (which carries DWARF) and starts the debugger the user has. Only an
 // executable can be debugged.
 export async function debugTarget(givenFolder?: vscode.WorkspaceFolder, givenTarget?: string): Promise<void> {
+    // Before anything is built: a build nobody can debug is wasted, and `cppdbg` without its extension only says it is "not supported".
+    const type = debuggerType();
+    if (type === undefined) {
+        await offerDebugger();
+        return;
+    }
     const folder = await chooseFolder(givenFolder);
     const prismio = prismioPath();
     if (!folder || !prismio) {
@@ -141,7 +164,6 @@ export async function debugTarget(givenFolder?: vscode.WorkspaceFolder, givenTar
     if ((await done) !== 0) {
         return;
     }
-    const type = vscode.extensions.getExtension("vadimcn.vscode-lldb") ? "lldb" : "cppdbg";
     await vscode.debug.startDebugging(folder, {
         type, request: "launch", name: `Prismio: ${target}`,
         program: path.join(folder.uri.fsPath, ".prismio", "build", "debug", process.platform === "win32" ? `${target}.exe` : target),

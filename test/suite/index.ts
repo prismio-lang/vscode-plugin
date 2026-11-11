@@ -151,14 +151,42 @@ test("a task of the second folder runs in the second folder", async () => {
   assert.ok(fs.existsSync(path.join(second.uri.fsPath, ".prismio", "build", "debug", "second")), "built beside the second build.ums");
 });
 
-test("debugging starts with a build of the chosen folder's target", async () => {
+test("Debug without a debugger extension says so, offers CodeLLDB and starts no session", async () => {
+  // The suite runs with --disable-extensions, so neither CodeLLDB nor the C/C++ extension is there.
+  assert.ok(!vscode.extensions.getExtension("vadimcn.vscode-lldb") && !vscode.extensions.getExtension("ms-vscode.cpptools"));
   const second = folderNamed("second");
-  const started = new Promise<vscode.Task>((resolve) => {
-    const listener = vscode.tasks.onDidStartTaskProcess((e) => { listener.dispose(); resolve(e.execution.task); });
-  });
-  void vscode.commands.executeCommand("prismio.debugTarget", second.uri.toString(), "second");
-  const task = await started;
-  assert.deepStrictEqual([scopeName(task), task.name], ["second", "build second"]);
+  const shown: { message: string; buttons: string[] }[] = [];
+  const opened: unknown[][] = [];
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const commandsApi = vscode.commands as unknown as Record<string, unknown>;
+  const realError = windowApi.showErrorMessage;
+  const realExecute = commandsApi.executeCommand;
+  // Answer the message as a user who clicks its button.
+  windowApi.showErrorMessage = async (message: string, ...buttons: string[]) => { shown.push({ message, buttons }); return buttons[0]; };
+  commandsApi.executeCommand = (command: string, ...args: unknown[]) => {
+    if (command === "extension.open") { opened.push(args); return Promise.resolve(undefined); }
+    return (realExecute as typeof vscode.commands.executeCommand).call(vscode.commands, command, ...args);
+  };
+  const sessions: string[] = [];
+  const tasks: string[] = [];
+  const listeners = [
+    vscode.debug.onDidStartDebugSession((s) => sessions.push(s.type)),
+    vscode.tasks.onDidStartTask((e) => tasks.push(e.execution.task.name)),
+  ];
+  try {
+    await vscode.commands.executeCommand("prismio.debugTarget", second.uri.toString(), "second");
+    await sleep(1500);
+  } finally {
+    windowApi.showErrorMessage = realError;
+    commandsApi.executeCommand = realExecute;
+    listeners.forEach((l) => l.dispose());
+  }
+  assert.strictEqual(shown.length, 1, JSON.stringify(shown));
+  assert.ok(/debugger/i.test(shown[0].message) && /CodeLLDB/.test(shown[0].message), shown[0].message);
+  assert.deepStrictEqual(shown[0].buttons, ["Install CodeLLDB"]);
+  assert.deepStrictEqual(opened, [["vadimcn.vscode-lldb"]], "the button opens CodeLLDB in the Extensions view");
+  assert.deepStrictEqual(sessions, [], "no debug session, in particular no cppdbg one");
+  assert.deepStrictEqual(tasks, [], "nothing is built for a debugger that is not there");
 });
 
 test("a manifest error shows up as a diagnostic, from the server", async () => {
